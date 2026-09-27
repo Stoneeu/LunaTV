@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q');
+  const cardsOnly = searchParams.get('view') === 'cards';
 
   if (!query) {
     const cacheTime = await getCacheTime();
@@ -37,17 +38,24 @@ export async function GET(request: NextRequest) {
   const apiSites = await getAvailableApiSites(authInfo.username);
 
   // 添加超时控制和错误处理，避免慢接口拖累整体响应
-  const searchPromises = apiSites.map((site) =>
-    Promise.race([
+  const searchPromises = apiSites.map((site) => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    return Promise.race([
       searchFromApi(site, query),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`${site.name} timeout`)), 20000)
+      new Promise(
+        (_, reject) =>
+          (timeoutId = setTimeout(
+            () => reject(new Error(`${site.name} timeout`)),
+            20000
+          ))
       ),
-    ]).catch((err) => {
-      console.warn(`搜索失败 ${site.name}:`, err.message);
-      return []; // 返回空数组而不是抛出错误
-    })
-  );
+    ])
+      .catch((err) => {
+        console.warn(`搜索失败 ${site.name}:`, err.message);
+        return []; // 返回空数组而不是抛出错误
+      })
+      .finally(() => clearTimeout(timeoutId));
+  });
 
   try {
     const results = await Promise.allSettled(searchPromises);
@@ -62,6 +70,20 @@ export async function GET(request: NextRequest) {
       });
     }
     const cacheTime = await getCacheTime();
+    // TV grids do not need episode URLs or descriptions. Strip those before
+    // JSON serialization so the device never allocates the full payload.
+    const responseResults = cardsOnly
+      ? flattenedResults.map(
+          ({ id, source, title, poster, source_name, year }) => ({
+            id,
+            source,
+            title,
+            poster,
+            source_name,
+            year,
+          })
+        )
+      : flattenedResults;
 
     if (flattenedResults.length === 0) {
       // no cache if empty
@@ -69,7 +91,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { results: flattenedResults },
+      { results: responseResults },
       {
         headers: {
           'Cache-Control': `public, max-age=${cacheTime}, s-maxage=${cacheTime}`,
