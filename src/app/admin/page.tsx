@@ -44,6 +44,7 @@ import { createPortal } from 'react-dom';
 import { AdminConfig, AdminConfigResult } from '@/lib/admin.types';
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 
+import AppCatalogConfig from '@/components/AppCatalogConfig';
 import DataMigration from '@/components/DataMigration';
 import PageLayout from '@/components/PageLayout';
 
@@ -5524,6 +5525,12 @@ function AdminPageClient() {
               onToggle={() => toggleTab('categoryConfig')}
             >
               <CategoryConfig config={config} refreshConfig={fetchConfig} />
+              <div className='mt-8 border-t pt-6'>
+                <h2 className='mb-4 text-lg font-semibold'>
+                  Android App 動態分類
+                </h2>
+                <AppCatalogConfig />
+              </div>
             </CollapsibleTab>
 
             {/* 数据迁移标签 - 仅站长可见 */}

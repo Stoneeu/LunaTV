@@ -122,6 +122,8 @@ export interface DoubanResult {
   code: number;
   message: string;
   list: DoubanItem[];
+  nextStart?: number;
+  hasMore?: boolean;
 }
 
 // 跳过片头片尾配置数据结构

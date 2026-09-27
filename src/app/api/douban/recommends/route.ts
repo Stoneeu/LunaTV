@@ -30,8 +30,23 @@ export async function GET(request: NextRequest) {
 
   // 获取参数
   const kind = searchParams.get('kind');
-  const pageLimit = parseInt(searchParams.get('limit') || '20');
-  const pageStart = parseInt(searchParams.get('start') || '0');
+  const pageLimit = Number(searchParams.get('limit') ?? '20');
+  const pageStart = Number(searchParams.get('start') ?? '0');
+  if (
+    !['tv', 'movie'].includes(kind || '') ||
+    !Number.isSafeInteger(pageLimit) ||
+    pageLimit < 1 ||
+    pageLimit > 100 ||
+    !Number.isSafeInteger(pageStart) ||
+    pageStart < 0 ||
+    pageStart > 1_000_000 ||
+    Array.from(searchParams.values()).some((value) => value.length > 100)
+  ) {
+    return NextResponse.json(
+      { error: '查詢或分頁參數不正確' },
+      { status: 400 }
+    );
+  }
   const category =
     searchParams.get('category') === 'all' ? '' : searchParams.get('category');
   const format =
@@ -92,11 +107,12 @@ export async function GET(request: NextRequest) {
   }
 
   const target = `${baseUrl}?${params.toString()}`;
-  console.log(target);
   try {
     const doubanData = await fetchDoubanData<DoubanRecommendApiResponse>(
       target
     );
+    if (!Array.isArray(doubanData.items))
+      throw new Error('Invalid upstream list');
     const list = doubanData.items
       .filter((item) => item.type == 'movie' || item.type == 'tv')
       .map((item) => ({
@@ -110,6 +126,9 @@ export async function GET(request: NextRequest) {
       code: 200,
       message: '获取成功',
       list: list,
+      nextStart: pageStart + doubanData.items.length,
+      // Count before filtering. A short/filtered page is not necessarily EOF.
+      hasMore: doubanData.items.length > 0,
     };
 
     const cacheTime = await getCacheTime();
